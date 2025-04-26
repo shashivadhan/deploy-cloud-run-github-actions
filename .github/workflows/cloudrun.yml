@@ -1,0 +1,45 @@
+name: Build and Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: shashigcp-454502
+  REGION: us-central1
+  REPO_NAME: gh-demo
+  SERVICE_NAME: flask-app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Authorize Docker to push to Artifact Registry
+        run: |
+          gcloud auth configure-docker ${REGION}-docker.pkg.dev
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${SERVICE_NAME}:latest .
+
+      - name: Push Docker image to Artifact Registry
+        run: |
+          docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${SERVICE_NAME}:latest
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          image: ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${SERVICE_NAME}:latest
+          region: ${{ env.REGION }}
+          allow_unauthenticated: true
